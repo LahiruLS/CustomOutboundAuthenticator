@@ -1,4 +1,4 @@
-package org.wso2.carbon.identity.application.authenticator.custom.test;
+package org.wso2.carbon.identity.application.authenticator.custom;
 
 import org.wso2.carbon.identity.application.authentication.framework.AbstractApplicationAuthenticator;
 import org.wso2.carbon.identity.application.authentication.framework.AuthenticatorFlowStatus;
