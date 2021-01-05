@@ -24,15 +24,17 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
     }
 
     public String getContextIdentifier(HttpServletRequest httpServletRequest) {
-        return "TEST";
+
+        return httpServletRequest.getParameter(CustomConstants.SESSION_DATA_KEY);
+
     }
 
     public String getName() {
-        return "TEST CUSTOM AUTHENTICATOR";
+        return "Test name for custom authenticator";
     }
 
     public String getFriendlyName() {
-        return "TEST CUSTOM AUTHENTICATOR";
+        return "Test friendly name for custom authenticator";
     }
 
     @Override
@@ -52,22 +54,22 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
 
     @Override
     public List<Property> getConfigurationProperties() {
-        List<Property> configProperties = new ArrayList<Property>();
+        List<Property> configProperties = new ArrayList<>();
 
-        Property clientId = new Property();
-        clientId.setName("TEST 1");
-        clientId.setDisplayName("TEST 1");
-        clientId.setRequired(true);
-        clientId.setDescription("TEST");
-        configProperties.add(clientId);
+        Property testProperty1 = new Property();
+        testProperty1.setName("Test name 1");
+        testProperty1.setDisplayName("Test display name 1");
+        testProperty1.setRequired(true);
+        testProperty1.setDescription("Test description 1");
+        configProperties.add(testProperty1);
 
-        Property clientSecret = new Property();
-        clientSecret.setName("TEST 2");
-        clientSecret.setDisplayName("TEST 2");
-        clientSecret.setRequired(true);
-        clientSecret.setConfidential(true);
-        clientSecret.setDescription("TEST 2");
-        configProperties.add(clientSecret);
+        Property testProperty2 = new Property();
+        testProperty2.setName("Test name 2");
+        testProperty2.setDisplayName("Test display name 2");
+        testProperty2.setRequired(true);
+        testProperty2.setConfidential(true);
+        testProperty2.setDescription("Test description 2");
+        configProperties.add(testProperty2);
 
         return configProperties;
     }
