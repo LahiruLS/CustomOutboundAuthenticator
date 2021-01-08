@@ -178,9 +178,40 @@
             <artifactId>pax-logging-api</artifactId>
             <version>${pax.logging.api.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.wso2.orbit.sun.xml.ws</groupId>
+            <artifactId>jaxws-ri</artifactId>
+            <version>2.3.2.wso2v1</version>
+        </dependency>
     </dependencies>
     <build>
         <plugins>
+
+<!--            Used for SOAP client code generation-->
+          <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>jaxws-maven-plugin</artifactId>
+                <version>2.6</version>
+                <executions>
+                    <execution>
+                        <id>wsimport-from-jdk</id>
+                        <goals>
+                            <goal>wsimport</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <wsdlUrls>
+                        <wsdlUrl>https://online.bharti-axalife.com/MiscServices/AgentDetails_Msell_UAT_WebService/Service1.svc?singleWsdl</wsdlUrl>
+                    </wsdlUrls>
+                    <keep>true</keep>
+                    <packageName>org.wso2.carbon.identity.application.authenticator.custom.client</packageName>
+                    <sourceDestDir>src/main/java</sourceDestDir>
+                </configuration>
+            </plugin>
+
+
+
             <plugin>
                 <groupId>org.apache.felix</groupId>
                 <artifactId>maven-bundle-plugin</artifactId>
