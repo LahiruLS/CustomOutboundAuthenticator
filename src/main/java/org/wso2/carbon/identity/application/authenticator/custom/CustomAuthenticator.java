@@ -8,12 +8,16 @@ import org.wso2.carbon.identity.application.authentication.framework.FederatedAp
 import org.wso2.carbon.identity.application.authentication.framework.context.AuthenticationContext;
 import org.wso2.carbon.identity.application.authentication.framework.exception.AuthenticationFailedException;
 import org.wso2.carbon.identity.application.authentication.framework.exception.LogoutFailedException;
+import org.wso2.carbon.identity.application.authenticator.basicauth.BasicAuthenticatorConstants;
 import org.wso2.carbon.identity.application.common.model.Property;
+import org.wso2.carbon.identity.application.common.model.User;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class CustomAuthenticator extends AbstractApplicationAuthenticator implements FederatedApplicationAuthenticator {
 
@@ -21,16 +25,31 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
 
     /**
      * Specifies whether this authenticator can handle the authentication response.
-     * @param httpServletRequest
+     *
+     * @param request
      * @return
      */
-    public boolean canHandle(HttpServletRequest httpServletRequest) {
-        return true;
+    public boolean canHandle(HttpServletRequest request) {
+
+        String agentCode = request.getParameter(CustomConstants.AGENT_CODE);
+        String mobileNumber = request.getParameter(CustomConstants.MOBILE_NUMBER);
+        return agentCode != null || mobileNumber != null;
+
     }
 
     @Override
     protected void initiateAuthenticationRequest(HttpServletRequest request, HttpServletResponse response, AuthenticationContext context) throws AuthenticationFailedException {
-        super.initiateAuthenticationRequest(request, response, context);
+
+        Map<String, String> parameterMap = getAuthenticatorConfig().getParameterMap();
+        String redirectURL = parameterMap.get("redirect");
+        try {
+
+            response.sendRedirect(redirectURL);
+
+        } catch (IOException e) {
+            throw new AuthenticationFailedException(e.getMessage(), User.getUserFromUserName(request.getParameter
+                    (CustomConstants.AUTHENTICATOR_NAME)), e);
+        }
     }
 
     @Override
@@ -39,6 +58,11 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
     }
 
     protected void processAuthenticationResponse(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, AuthenticationContext authenticationContext) throws AuthenticationFailedException {
+
+        /*
+        The client's Web Services for agent validation and
+        OTP must be called from here, after user has entered the credentials.
+         */
 
     }
 
@@ -59,20 +83,12 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
 
         List<Property> configProperties = new ArrayList<>();
 
-        Property testProperty1 = new Property();
-        testProperty1.setName("Test name 1");
-        testProperty1.setDisplayName("Test display name 1");
-        testProperty1.setRequired(true);
-        testProperty1.setDescription("Test description 1");
-        configProperties.add(testProperty1);
-
-        Property testProperty2 = new Property();
-        testProperty2.setName("Test name 2");
-        testProperty2.setDisplayName("Test display name 2");
-        testProperty2.setRequired(true);
-        testProperty2.setConfidential(true);
-        testProperty2.setDescription("Test description 2");
-        configProperties.add(testProperty2);
+        Property RedirectUrl = new Property();
+        RedirectUrl.setName("redirect");
+        RedirectUrl.setDisplayName("Redirect URL");
+        RedirectUrl.setRequired(true);
+        RedirectUrl.setDescription("The URL where the login request will be redirected to");
+        configProperties.add(RedirectUrl);
 
         return configProperties;
     }
@@ -80,6 +96,7 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
     /**
      * Returns a unique identifier that will map the authentication request and the response.
      * The value returned by the invocation of authentication request and the response should be the same.
+     *
      * @param httpServletRequest
      * @return
      */
@@ -90,10 +107,10 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
     }
 
     public String getName() {
-        return "Test name for custom authenticator";
+        return CustomConstants.AUTHENTICATOR_NAME;
     }
 
     public String getFriendlyName() {
-        return "Test friendly name for custom authenticator";
+        return CustomConstants.AUTHENTICATOR_FRIENDLY_NAME;
     }
 }
