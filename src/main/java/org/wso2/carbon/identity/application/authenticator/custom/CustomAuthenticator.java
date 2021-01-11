@@ -5,6 +5,7 @@ import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.identity.application.authentication.framework.AbstractApplicationAuthenticator;
 import org.wso2.carbon.identity.application.authentication.framework.AuthenticatorFlowStatus;
 import org.wso2.carbon.identity.application.authentication.framework.FederatedApplicationAuthenticator;
+import org.wso2.carbon.identity.application.authentication.framework.config.ConfigurationFacade;
 import org.wso2.carbon.identity.application.authentication.framework.context.AuthenticationContext;
 import org.wso2.carbon.identity.application.authentication.framework.exception.AuthenticationFailedException;
 import org.wso2.carbon.identity.application.authentication.framework.exception.LogoutFailedException;
@@ -40,8 +41,16 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
     @Override
     protected void initiateAuthenticationRequest(HttpServletRequest request, HttpServletResponse response, AuthenticationContext context) throws AuthenticationFailedException {
 
-        Map<String, String> parameterMap = getAuthenticatorConfig().getParameterMap();
-        String redirectURL = parameterMap.get("redirect");
+        //As start, we will be using wso2-is login page instead client's one.
+        String loginPage = ConfigurationFacade.getInstance().getAuthenticationEndpointURL();
+        String queryParams = context.getContextIdIncludedQueryParams();
+
+        String redirectURL = loginPage + ("?" + queryParams)
+                + BasicAuthenticatorConstants.AUTHENTICATORS + getName();
+
+        //Map<String, String> parameterMap = context.getAuthenticatorProperties();
+        //String redirectURL = parameterMap.get("redirect");
+
         try {
 
             response.sendRedirect(redirectURL);
@@ -50,11 +59,6 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
             throw new AuthenticationFailedException(e.getMessage(), User.getUserFromUserName(request.getParameter
                     (CustomConstants.AUTHENTICATOR_NAME)), e);
         }
-    }
-
-    @Override
-    public AuthenticatorFlowStatus process(HttpServletRequest request, HttpServletResponse response, AuthenticationContext context) throws AuthenticationFailedException, LogoutFailedException {
-        return super.process(request, response, context);
     }
 
     protected void processAuthenticationResponse(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, AuthenticationContext authenticationContext) throws AuthenticationFailedException {
@@ -67,28 +71,18 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
     }
 
     @Override
-    protected void initiateLogoutRequest(HttpServletRequest request, HttpServletResponse response, AuthenticationContext context) throws LogoutFailedException {
-
-    }
-
-    @Override
-    protected void processLogoutResponse(HttpServletRequest request, HttpServletResponse response, AuthenticationContext context) throws LogoutFailedException {
-
-    }
-
-    @Override
     public List<Property> getConfigurationProperties() {
 
         //This list will be shown in the UI. Two sample properties were loaded to show each text field position.
 
         List<Property> configProperties = new ArrayList<>();
 
-        Property RedirectUrl = new Property();
-        RedirectUrl.setName("redirect");
-        RedirectUrl.setDisplayName("Redirect URL");
-        RedirectUrl.setRequired(true);
-        RedirectUrl.setDescription("The URL where the login request will be redirected to");
-        configProperties.add(RedirectUrl);
+        Property redirectUrl = new Property();
+        redirectUrl.setName("redirect");
+        redirectUrl.setDisplayName("Redirect URL");
+        redirectUrl.setRequired(true);
+        redirectUrl.setDescription("The URL where the login request will be redirected to");
+        configProperties.add(redirectUrl);
 
         return configProperties;
     }
