@@ -7,9 +7,11 @@ import org.wso2.carbon.identity.application.authentication.framework.AbstractApp
 import org.wso2.carbon.identity.application.authentication.framework.AuthenticatorFlowStatus;
 import org.wso2.carbon.identity.application.authentication.framework.FederatedApplicationAuthenticator;
 import org.wso2.carbon.identity.application.authentication.framework.config.ConfigurationFacade;
+import org.wso2.carbon.identity.application.authentication.framework.config.model.StepConfig;
 import org.wso2.carbon.identity.application.authentication.framework.context.AuthenticationContext;
 import org.wso2.carbon.identity.application.authentication.framework.exception.AuthenticationFailedException;
 import org.wso2.carbon.identity.application.authentication.framework.exception.LogoutFailedException;
+import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
 import org.wso2.carbon.identity.application.authenticator.basicauth.BasicAuthenticatorConstants;
 import org.wso2.carbon.identity.application.common.model.Property;
 import org.wso2.carbon.identity.application.common.model.User;
@@ -20,6 +22,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class CustomAuthenticator extends AbstractApplicationAuthenticator implements FederatedApplicationAuthenticator {
 
@@ -39,19 +42,27 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
 
     @Override
     public AuthenticatorFlowStatus process(HttpServletRequest request, HttpServletResponse response, AuthenticationContext context) throws AuthenticationFailedException, LogoutFailedException {
+
         // if the logout request comes, then no need to go through and complete the flow.
         if (context.isLogoutRequest()) {
             return AuthenticatorFlowStatus.SUCCESS_COMPLETED;
-        } else if (StringUtils.isNotEmpty(request.getParameter(CustomConstants.AGENT_CODE))
-                || StringUtils.isNotEmpty(request.getParameter(CustomConstants.MOBILE_NUMBER))) {
-            // if the request comes with EMAIL ADDRESS, it will go through this flow.
+
+        } else if (StringUtils.isNotEmpty(request.getParameter(CustomConstants.CODE))) { //if the user entered Otp code
+
+            //this super.process() will call processAuthenticationResponse(), where the validation happens.
+            return super.process(request, response, context);
+
+        } else if ( //if the user already entered the email address (agent code or mobile number for the real case)
+                /*StringUtils.isNotEmpty(request.getParameter(CustomConstants.AGENT_CODE))
+                && StringUtils.isNotEmpty(request.getParameter(CustomConstants.MOBILE_NUMBER))*/
+                StringUtils.isNotEmpty(request.getParameter("EMAIL_ADDRESS"))
+        ) {
             initiateAuthenticationRequest(request, response, context);
+            context.setCurrentAuthenticator(getName());
             return AuthenticatorFlowStatus.INCOMPLETE;
-        } else if (StringUtils.isNotEmpty(request.getParameter(CustomConstants.CODE))) {
-            AuthenticatorFlowStatus authenticatorFlowStatus = super.process(request, response, context);
-            //doSomeOTPValidationStuff();
-            return authenticatorFlowStatus;
-        } else {
+
+        } else { //if it's the first step:
+            context.setProperty(CustomConstants.AUTH_STEP_KEY, CustomConstants.STEP_CODE_OR_MOBILE);
             initiateAuthenticationRequest(request, response, context);
             return AuthenticatorFlowStatus.INCOMPLETE;
             //return super.process(request, response, context);
@@ -64,32 +75,94 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
     protected void initiateAuthenticationRequest(HttpServletRequest request, HttpServletResponse response, AuthenticationContext context) throws AuthenticationFailedException {
 
         context.setProperty(CustomConstants.AUTHENTICATION, CustomConstants.AUTHENTICATOR_NAME);
-        //As start, we will be using wso2-is login page instead client's one.
+        String step = String.valueOf(context.getProperty(CustomConstants.AUTH_STEP_KEY));
         String loginPage = ConfigurationFacade.getInstance().getAuthenticationEndpointURL();
         String queryParams = context.getContextIdIncludedQueryParams();
+        String redirectURL;
 
-        String redirectURL = loginPage + ("?" + queryParams)
-                + BasicAuthenticatorConstants.AUTHENTICATORS + getName();
+        if (Objects.nonNull(step)) {
 
-        try {
+            context.setProperty(CustomConstants.AGENT_BASED_AUTH_STATUS_KEY, "true");
 
-            response.sendRedirect(getOTPLoginPage(context, getAuthenticatorConfig().getParameterMap()));
+            switch (step) {
+                case CustomConstants.STEP_CODE_OR_MOBILE:
+                    redirectURL = getEmailAddressRequestPage(context, getAuthenticatorConfig().getParameterMap())
+                            + ("?" + queryParams)
+                            + BasicAuthenticatorConstants.AUTHENTICATORS + getName();
 
-        } catch (IOException e) {
-            throw new AuthenticationFailedException(e.getMessage(), User.getUserFromUserName(request.getParameter
-                    (CustomConstants.AUTHENTICATOR_NAME)), e);
+                    try {
+
+                        response.sendRedirect(redirectURL);
+
+                    } catch (IOException e) {
+                        throw new AuthenticationFailedException(e.getMessage(), User.getUserFromUserName(request.getParameter
+                                (CustomConstants.AUTHENTICATOR_NAME)), e);
+                    }
+                    context.setProperty(CustomConstants.AUTH_STEP_KEY, CustomConstants.STEP_OTP);
+                    break;
+                case CustomConstants.STEP_OTP:
+
+                    AuthenticatedUser authenticatedUser = getAgentDetails(context);
+                    context.setSubject(authenticatedUser);
+
+                    redirectURL = getOTPLoginPage(context, getAuthenticatorConfig().getParameterMap())
+                            + ("?" + queryParams)
+                            + BasicAuthenticatorConstants.AUTHENTICATORS + getName();
+
+                    try {
+
+                        response.sendRedirect(redirectURL);
+
+                    } catch (IOException e) {
+                        throw new AuthenticationFailedException(e.getMessage(), User.getUserFromUserName(request.getParameter
+                                (CustomConstants.AUTHENTICATOR_NAME)), e);
+                    }
+                    context.setProperty(CustomConstants.AUTH_STEP_KEY, CustomConstants.STEP_DONE);
+                    break;
+            }
         }
-
 
     }
 
-    protected void processAuthenticationResponse(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, AuthenticationContext authenticationContext) throws AuthenticationFailedException {
+    private AuthenticatedUser getAgentDetails(AuthenticationContext context) {
+        //here we should call to get agent details web service from client.
 
-        /*
-        The client's Web Services for agent validation and
-        OTP must be called from here, after user has entered the credentials.
-         */
+        return getAuthenticatedUser(context);
 
+    }
+
+    protected void processAuthenticationResponse(HttpServletRequest request, HttpServletResponse response, AuthenticationContext context) throws AuthenticationFailedException {
+
+        if (!validateOTP(request)) {
+            throw new AuthenticationFailedException("OTP validation failed.");
+        }
+
+    }
+
+    private AuthenticatedUser getAuthenticatedUser(AuthenticationContext context) {
+
+        AuthenticatedUser authenticatedUser = null;
+        Map<Integer, StepConfig> stepConfigMap = context.getSequenceConfig().getStepMap();
+        for (StepConfig stepConfig : stepConfigMap.values()) {
+            AuthenticatedUser authenticatedUserInStepConfig = stepConfig.getAuthenticatedUser();
+            if (stepConfig.isSubjectAttributeStep() && authenticatedUserInStepConfig != null) {
+                authenticatedUser = stepConfig.getAuthenticatedUser();
+                break;
+            }
+        }
+        return authenticatedUser;
+    }
+
+    private void processValidUserToken(AuthenticationContext context, AuthenticatedUser authenticatedUser) {
+
+        context.setProperty(CustomConstants.CODE, StringUtils.EMPTY);
+        context.setSubject(authenticatedUser);
+    }
+
+    private Boolean validateOTP(HttpServletRequest request) {
+        //OTP client's validation web service must be called from here.
+        //dummy validation:
+        return request.getParameter(CustomConstants.CODE).equals("1234");
     }
 
     @Override
@@ -187,6 +260,21 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
     private String getAgentDetailsReqPage(AuthenticationContext context, Map<String, String> emailOTPParameters) {
 
         return " ";
+    }
+
+    private String getEmailAddressRequestPage(AuthenticationContext context, Map<String, String> parametersMap) {
+        String emailAddressReqPage = null;
+        String tenantDomain = context.getTenantDomain();
+        Object propertiesFromLocal = context.getProperty(CustomConstants.GET_PROPERTY_FROM_REGISTRY);
+        if ((propertiesFromLocal != null || tenantDomain.equals(CustomConstants.SUPER_TENANT)) &&
+                parametersMap.containsKey(CustomConstants.EMAIL_ADDRESS_REQ_PAGE)) {
+            emailAddressReqPage = parametersMap.get(CustomConstants.EMAIL_ADDRESS_REQ_PAGE);
+        } else if ((context.getProperty(CustomConstants.EMAIL_ADDRESS_REQ_PAGE)) != null) {
+            emailAddressReqPage = String.valueOf(context.getProperty(CustomConstants.EMAIL_ADDRESS_REQ_PAGE));
+        }
+
+        //variable is null -> check
+        return "https://localhost:9443/emailotpauthenticationendpoint/emailAddress.jsp";
     }
 
 }
