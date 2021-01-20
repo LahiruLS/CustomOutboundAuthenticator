@@ -1,5 +1,6 @@
 package org.wso2.carbon.identity.application.authenticator.custom;
 
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.identity.application.authentication.framework.AbstractApplicationAuthenticator;
@@ -32,15 +33,37 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
      */
     public boolean canHandle(HttpServletRequest request) {
 
-        String agentCode = request.getParameter(CustomConstants.AGENT_CODE);
-        String mobileNumber = request.getParameter(CustomConstants.MOBILE_NUMBER);
-        return agentCode != null || mobileNumber != null;
+        return true;
+
+    }
+
+    @Override
+    public AuthenticatorFlowStatus process(HttpServletRequest request, HttpServletResponse response, AuthenticationContext context) throws AuthenticationFailedException, LogoutFailedException {
+        // if the logout request comes, then no need to go through and complete the flow.
+        if (context.isLogoutRequest()) {
+            return AuthenticatorFlowStatus.SUCCESS_COMPLETED;
+        } else if (StringUtils.isNotEmpty(request.getParameter(CustomConstants.AGENT_CODE))
+                || StringUtils.isNotEmpty(request.getParameter(CustomConstants.MOBILE_NUMBER))) {
+            // if the request comes with EMAIL ADDRESS, it will go through this flow.
+            initiateAuthenticationRequest(request, response, context);
+            return AuthenticatorFlowStatus.INCOMPLETE;
+        } else if (StringUtils.isNotEmpty(request.getParameter(CustomConstants.CODE))) {
+            AuthenticatorFlowStatus authenticatorFlowStatus = super.process(request, response, context);
+            //doSomeOTPValidationStuff();
+            return authenticatorFlowStatus;
+        } else {
+            initiateAuthenticationRequest(request, response, context);
+            return AuthenticatorFlowStatus.INCOMPLETE;
+            //return super.process(request, response, context);
+        }
+
 
     }
 
     @Override
     protected void initiateAuthenticationRequest(HttpServletRequest request, HttpServletResponse response, AuthenticationContext context) throws AuthenticationFailedException {
 
+        context.setProperty(CustomConstants.AUTHENTICATION, CustomConstants.AUTHENTICATOR_NAME);
         //As start, we will be using wso2-is login page instead client's one.
         String loginPage = ConfigurationFacade.getInstance().getAuthenticationEndpointURL();
         String queryParams = context.getContextIdIncludedQueryParams();
@@ -48,17 +71,16 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
         String redirectURL = loginPage + ("?" + queryParams)
                 + BasicAuthenticatorConstants.AUTHENTICATORS + getName();
 
-        //Map<String, String> parameterMap = context.getAuthenticatorProperties();
-        //String redirectURL = parameterMap.get("redirect");
-
         try {
 
-            response.sendRedirect(redirectURL);
+            response.sendRedirect(getOTPLoginPage(context, getAuthenticatorConfig().getParameterMap()));
 
         } catch (IOException e) {
             throw new AuthenticationFailedException(e.getMessage(), User.getUserFromUserName(request.getParameter
                     (CustomConstants.AUTHENTICATOR_NAME)), e);
         }
+
+
     }
 
     protected void processAuthenticationResponse(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, AuthenticationContext authenticationContext) throws AuthenticationFailedException {
@@ -74,15 +96,25 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
     public List<Property> getConfigurationProperties() {
 
         //This list will be shown in the UI. Two sample properties were loaded to show each text field position.
-
         List<Property> configProperties = new ArrayList<>();
 
         Property redirectUrl = new Property();
-        redirectUrl.setName("redirect");
+        redirectUrl.setName("redirectUrl");
         redirectUrl.setDisplayName("Redirect URL");
         redirectUrl.setRequired(true);
         redirectUrl.setDescription("The URL where the login request will be redirected to");
+        redirectUrl.setType("string");
+        redirectUrl.setDisplayOrder(1);
         configProperties.add(redirectUrl);
+
+        Property callBackUrl = new Property();
+        callBackUrl.setName("otpPageUrl");
+        callBackUrl.setDisplayName("OTP submission page Url");
+        callBackUrl.setRequired(true);
+        callBackUrl.setDescription("The URL where the OTP submission request will be redirected to");
+        callBackUrl.setType("string");
+        callBackUrl.setDisplayOrder(2);
+        configProperties.add(callBackUrl);
 
         return configProperties;
     }
@@ -107,4 +139,54 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
     public String getFriendlyName() {
         return CustomConstants.AUTHENTICATOR_FRIENDLY_NAME;
     }
+
+    /**
+     * Redirect the user to agent details request page where user has to
+     * enter either the agent ID or the mobile number and submit.
+     *
+     * @param response    the HttpServletResponse
+     * @param context     the AuthenticationContext
+     * @param queryParams the queryParams
+     * @throws AuthenticationFailedException
+     */
+    private void redirectToAgentDetailsReqPage(HttpServletResponse response, AuthenticationContext context,
+                                               Map<String, String> authenticatorParameters, String queryParams)
+            throws AuthenticationFailedException {
+        String agentDetailsReqPage = getAgentDetailsReqPage(context, authenticatorParameters);
+        try {
+            String url = getRedirectURL(agentDetailsReqPage, queryParams);
+            response.sendRedirect(url);
+        } catch (IOException e) {
+            throw new AuthenticationFailedException("Authentication failed!. An IOException was caught while " +
+                    "redirecting to agent details  request page. ", e);
+        }
+    }
+
+    /**
+     * To get the redirection URL.
+     *
+     * @param baseURI     the base path
+     * @param queryParams the queryParams
+     * @return url
+     */
+    private String getRedirectURL(String baseURI, String queryParams) {
+        String url;
+        if (StringUtils.isNotEmpty(queryParams)) {
+            url = baseURI + "?" + queryParams + "&" + CustomConstants.AUTHENTICATORS + getName();
+        } else {
+            url = baseURI + "?" + CustomConstants.AUTHENTICATORS + getName();
+        }
+        return url;
+    }
+
+    private String getOTPLoginPage(AuthenticationContext context, Map<String, String> authenticatorParameters) {
+
+        return "https://localhost:9443/emailotpauthenticationendpoint/emailotp.jsp";
+    }
+
+    private String getAgentDetailsReqPage(AuthenticationContext context, Map<String, String> emailOTPParameters) {
+
+        return " ";
+    }
+
 }

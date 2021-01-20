@@ -6,6 +6,10 @@ public class CustomConstants {
     public static final String AUTHENTICATOR_FRIENDLY_NAME = "custom";
     public static final String AGENT_CODE = "agentCode";
     public static final String MOBILE_NUMBER = "mobileNumber";
+    public static final String AUTHENTICATORS = "authenticators=";
+    public static final String EMAILOTP_AUTHENTICATION_ENDPOINT_URL = "EMAILOTPAuthenticationEndpointURL";
+    public static final String CODE = "OTPCode";
+    public static final String AUTHENTICATION = "authentication";
 }
 
 
