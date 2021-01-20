@@ -52,10 +52,8 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
             //this super.process() will call processAuthenticationResponse(), where the validation happens.
             return super.process(request, response, context);
 
-        } else if ( //if the user already entered the email address (agent code or mobile number for the real case)
-                /*StringUtils.isNotEmpty(request.getParameter(CustomConstants.AGENT_CODE))
-                && StringUtils.isNotEmpty(request.getParameter(CustomConstants.MOBILE_NUMBER))*/
-                StringUtils.isNotEmpty(request.getParameter("EMAIL_ADDRESS"))
+        } else if ( //if the user already entered the code or mobile number
+                StringUtils.isNotEmpty(request.getParameter(CustomConstants.AGENT_CODE_OR_MOBILE))
         ) {
             initiateAuthenticationRequest(request, response, context);
             context.setCurrentAuthenticator(getName());
@@ -86,7 +84,7 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
 
             switch (step) {
                 case CustomConstants.STEP_CODE_OR_MOBILE:
-                    redirectURL = getEmailAddressRequestPage(context, getAuthenticatorConfig().getParameterMap())
+                    redirectURL = getAgentDetailsReqPage(context, getAuthenticatorConfig().getParameterMap())
                             + ("?" + queryParams)
                             + BasicAuthenticatorConstants.AUTHENTICATORS + getName();
 
@@ -253,28 +251,10 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
     }
 
     private String getOTPLoginPage(AuthenticationContext context, Map<String, String> authenticatorParameters) {
-
-        return "https://localhost:9443/emailotpauthenticationendpoint/emailotp.jsp";
+        return "https://localhost:9443/smsotpauthenticationendpoint/smsotp.jsp";
     }
 
     private String getAgentDetailsReqPage(AuthenticationContext context, Map<String, String> emailOTPParameters) {
-
-        return " ";
+        return "https://localhost:9443/emailotpauthenticationendpoint/custom-agent-code.jsp";
     }
-
-    private String getEmailAddressRequestPage(AuthenticationContext context, Map<String, String> parametersMap) {
-        String emailAddressReqPage = null;
-        String tenantDomain = context.getTenantDomain();
-        Object propertiesFromLocal = context.getProperty(CustomConstants.GET_PROPERTY_FROM_REGISTRY);
-        if ((propertiesFromLocal != null || tenantDomain.equals(CustomConstants.SUPER_TENANT)) &&
-                parametersMap.containsKey(CustomConstants.EMAIL_ADDRESS_REQ_PAGE)) {
-            emailAddressReqPage = parametersMap.get(CustomConstants.EMAIL_ADDRESS_REQ_PAGE);
-        } else if ((context.getProperty(CustomConstants.EMAIL_ADDRESS_REQ_PAGE)) != null) {
-            emailAddressReqPage = String.valueOf(context.getProperty(CustomConstants.EMAIL_ADDRESS_REQ_PAGE));
-        }
-
-        //variable is null -> check
-        return "https://localhost:9443/emailotpauthenticationendpoint/emailAddress.jsp";
-    }
-
 }

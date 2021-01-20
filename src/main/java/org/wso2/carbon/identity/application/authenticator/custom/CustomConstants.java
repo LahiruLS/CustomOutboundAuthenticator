@@ -8,7 +8,7 @@ public class CustomConstants {
     public static final String MOBILE_NUMBER = "mobileNumber";
     public static final String AUTHENTICATORS = "authenticators=";
     public static final String EMAILOTP_AUTHENTICATION_ENDPOINT_URL = "EMAILOTPAuthenticationEndpointURL";
-    public static final String CODE = "OTPCode";
+    public static final String CODE = "OTPcode";
     public static final String AUTHENTICATION = "authentication";
     public static final String GET_PROPERTY_FROM_REGISTRY = "getPropertiesFromLocal";
     public static final String SUPER_TENANT = "carbon.super";
@@ -18,6 +18,7 @@ public class CustomConstants {
     public static final String STEP_CODE_OR_MOBILE = "STEP_CODE_OR_MOBILE";
     public static final String STEP_OTP = "STEP_OTP";
     public static final String STEP_DONE = "STEP_DONE";
+    public static final String AGENT_CODE_OR_MOBILE = "AGENT_CODE_OR_MOBILE";
 }
 
 
