@@ -6,13 +6,11 @@ import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.identity.application.authentication.framework.AbstractApplicationAuthenticator;
 import org.wso2.carbon.identity.application.authentication.framework.AuthenticatorFlowStatus;
 import org.wso2.carbon.identity.application.authentication.framework.FederatedApplicationAuthenticator;
-import org.wso2.carbon.identity.application.authentication.framework.config.ConfigurationFacade;
 import org.wso2.carbon.identity.application.authentication.framework.config.model.StepConfig;
 import org.wso2.carbon.identity.application.authentication.framework.context.AuthenticationContext;
 import org.wso2.carbon.identity.application.authentication.framework.exception.AuthenticationFailedException;
 import org.wso2.carbon.identity.application.authentication.framework.exception.LogoutFailedException;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
-import org.wso2.carbon.identity.application.authenticator.basicauth.BasicAuthenticatorConstants;
 import org.wso2.carbon.identity.application.common.model.Property;
 import org.wso2.carbon.identity.application.common.model.User;
 
@@ -47,13 +45,15 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
         if (context.isLogoutRequest()) {
             return AuthenticatorFlowStatus.SUCCESS_COMPLETED;
 
-        } else if (StringUtils.isNotEmpty(request.getParameter(CustomConstants.CODE))) { //if the user entered Otp code
+        } else if (StringUtils.isNotEmpty(request.getParameter(CustomConstants.CODE)) //if the user entered Otp code
+                && checkStep(CustomConstants.STEP_OTP_SENT, context)) {
 
             //this super.process() will call processAuthenticationResponse(), where the validation happens.
             return super.process(request, response, context);
 
         } else if ( //if the user already entered the code or mobile number
                 StringUtils.isNotEmpty(request.getParameter(CustomConstants.AGENT_CODE_OR_MOBILE))
+                        && checkStep(CustomConstants.STEP_OTP, context)
         ) {
             initiateAuthenticationRequest(request, response, context);
             context.setCurrentAuthenticator(getName());
@@ -69,53 +69,51 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
 
     }
 
+    private boolean checkStep(String step, AuthenticationContext context) {
+        return step.equals(String.valueOf(context.getProperty(CustomConstants.AUTH_STEP_KEY)));
+    }
+
     @Override
     protected void initiateAuthenticationRequest(HttpServletRequest request, HttpServletResponse response, AuthenticationContext context) throws AuthenticationFailedException {
 
         context.setProperty(CustomConstants.AUTHENTICATION, CustomConstants.AUTHENTICATOR_NAME);
         String step = String.valueOf(context.getProperty(CustomConstants.AUTH_STEP_KEY));
-        String loginPage = ConfigurationFacade.getInstance().getAuthenticationEndpointURL();
         String queryParams = context.getContextIdIncludedQueryParams();
         String redirectURL;
 
         if (Objects.nonNull(step)) {
 
-            context.setProperty(CustomConstants.AGENT_BASED_AUTH_STATUS_KEY, "true");
-
             switch (step) {
                 case CustomConstants.STEP_CODE_OR_MOBILE:
-                    redirectURL = getAgentDetailsReqPage(context, getAuthenticatorConfig().getParameterMap())
-                            + ("?" + queryParams)
-                            + BasicAuthenticatorConstants.AUTHENTICATORS + getName();
+                    redirectURL = getRedirectURL(getAgentDetailsReqPage(context, context.getAuthenticatorProperties()), queryParams);
 
                     try {
 
                         response.sendRedirect(redirectURL);
+                        context.setProperty(CustomConstants.AUTH_STEP_KEY, CustomConstants.STEP_OTP);
 
                     } catch (IOException e) {
                         throw new AuthenticationFailedException(e.getMessage(), User.getUserFromUserName(request.getParameter
                                 (CustomConstants.AUTHENTICATOR_NAME)), e);
                     }
-                    context.setProperty(CustomConstants.AUTH_STEP_KEY, CustomConstants.STEP_OTP);
                     break;
                 case CustomConstants.STEP_OTP:
 
                     AuthenticatedUser authenticatedUser = getAgentDetails(context);
                     context.setSubject(authenticatedUser);
 
-                    redirectURL = getOTPLoginPage(context, getAuthenticatorConfig().getParameterMap())
-                            + ("?" + queryParams)
-                            + BasicAuthenticatorConstants.AUTHENTICATORS + getName();
+                    redirectURL = getRedirectURL(getOTPLoginPage(context, context.getAuthenticatorProperties()), queryParams);
 
                     try {
-
+                        generateOtpCode(request, context);
+                        //TODO OTP Code must be sent from here through the client's SMS web service.
                         response.sendRedirect(redirectURL);
 
+                        context.setProperty(CustomConstants.AUTH_STEP_KEY, CustomConstants.STEP_OTP_SENT);
                     } catch (IOException e) {
                         throw new AuthenticationFailedException(e.getMessage(), User.getUserFromUserName(request.getParameter
                                 (CustomConstants.AUTHENTICATOR_NAME)), e);
                     }
-                    context.setProperty(CustomConstants.AUTH_STEP_KEY, CustomConstants.STEP_DONE);
                     break;
             }
         }
@@ -123,17 +121,19 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
     }
 
     private AuthenticatedUser getAgentDetails(AuthenticationContext context) {
-        //here we should call to get agent details web service from client.
-
+        //TODO here we should call to get agent details web service from client, instead of below call.
         return getAuthenticatedUser(context);
 
     }
 
     protected void processAuthenticationResponse(HttpServletRequest request, HttpServletResponse response, AuthenticationContext context) throws AuthenticationFailedException {
 
-        if (!validateOTP(request)) {
+        if (!validateOTP(request, context)) {
+
             throw new AuthenticationFailedException("OTP validation failed.");
         }
+
+        context.setProperty(CustomConstants.CODE, StringUtils.EMPTY);
 
     }
 
@@ -151,16 +151,19 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
         return authenticatedUser;
     }
 
-    private void processValidUserToken(AuthenticationContext context, AuthenticatedUser authenticatedUser) {
 
-        context.setProperty(CustomConstants.CODE, StringUtils.EMPTY);
-        context.setSubject(authenticatedUser);
-    }
+    private Boolean validateOTP(HttpServletRequest request, AuthenticationContext context) throws AuthenticationFailedException {
+        String userToken = request.getParameter(CustomConstants.CODE);
+        String contextToken = (String) context.getProperty(CustomConstants.OTP_TOKEN);
+        long generatedTime = (long) context.getProperty(CustomConstants.OTP_GENERATED_TIME);
+        boolean isExpired = isExpired(generatedTime, context);
 
-    private Boolean validateOTP(HttpServletRequest request) {
-        //OTP client's validation web service must be called from here.
-        //dummy validation:
-        return request.getParameter(CustomConstants.CODE).equals("1234");
+        if (userToken.equals(contextToken) && !isExpired) {
+            context.setProperty(CustomConstants.CODE_MISMATCH, false);
+            return true;
+        }
+
+        return false;
     }
 
     @Override
@@ -212,28 +215,6 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
     }
 
     /**
-     * Redirect the user to agent details request page where user has to
-     * enter either the agent ID or the mobile number and submit.
-     *
-     * @param response    the HttpServletResponse
-     * @param context     the AuthenticationContext
-     * @param queryParams the queryParams
-     * @throws AuthenticationFailedException
-     */
-    private void redirectToAgentDetailsReqPage(HttpServletResponse response, AuthenticationContext context,
-                                               Map<String, String> authenticatorParameters, String queryParams)
-            throws AuthenticationFailedException {
-        String agentDetailsReqPage = getAgentDetailsReqPage(context, authenticatorParameters);
-        try {
-            String url = getRedirectURL(agentDetailsReqPage, queryParams);
-            response.sendRedirect(url);
-        } catch (IOException e) {
-            throw new AuthenticationFailedException("Authentication failed!. An IOException was caught while " +
-                    "redirecting to agent details  request page. ", e);
-        }
-    }
-
-    /**
      * To get the redirection URL.
      *
      * @param baseURI     the base path
@@ -250,11 +231,68 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
         return url;
     }
 
-    private String getOTPLoginPage(AuthenticationContext context, Map<String, String> authenticatorParameters) {
-        return "https://localhost:9443/smsotpauthenticationendpoint/smsotp.jsp";
+    private String getOTPLoginPage(AuthenticationContext context, Map<String, String> parameterMap) {
+        return parameterMap.get(CustomConstants.OTP_PAGE_URL);
+        //return "https://localhost:9443/smsotpauthenticationendpoint/smsotp.jsp";
     }
 
-    private String getAgentDetailsReqPage(AuthenticationContext context, Map<String, String> emailOTPParameters) {
-        return "https://localhost:9443/emailotpauthenticationendpoint/custom-agent-code.jsp";
+    private String getAgentDetailsReqPage(AuthenticationContext context, Map<String, String> parameterMap) {
+        return parameterMap.get(CustomConstants.REDIRECT_URL);
+        //"https://localhost:9443/emailotpauthenticationendpoint/custom-agent-code.jsp";
+    }
+
+    /**
+     * Checks whether otp is Expired or not.
+     *
+     * @param generatedTime : Email OTP generated time
+     * @param context       : the Authentication Context
+     */
+    protected boolean isExpired(long generatedTime, AuthenticationContext context)
+            throws AuthenticationFailedException {
+
+        Long expireTime;
+        try {
+            expireTime = Long.valueOf(getExpireTime(context));
+        } catch (NumberFormatException e) {
+            throw new AuthenticationFailedException("Invalid Email OTP expiration time configured.");
+        }
+        if (expireTime == -1) {
+            if (log.isDebugEnabled()) {
+                log.debug("Email OTP configured not to expire.");
+            }
+            return false;
+        } else if (System.currentTimeMillis() < generatedTime + expireTime) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+    /**
+     * A method to get Expire Time configuration from EmailOTPUtils.
+     *
+     * @param context :  AuthenticationContext
+     */
+    private String getExpireTime(AuthenticationContext context) {
+
+        String expireTime = getAuthenticatorConfig().getParameterMap().get(CustomConstants.OTP_CODE_EXPIRE_TIME);
+        if (StringUtils.isEmpty(expireTime)) {
+            expireTime = CustomConstants.OTP_EXPIRE_TIME_DEFAULT;
+            if (log.isDebugEnabled()) {
+                log.debug("OTP Expiration Time not specified default value will be used");
+            }
+        }
+        return expireTime;
+    }
+
+    private void generateOtpCode(HttpServletRequest request, AuthenticationContext context) {
+        OneTimePassword token = new OneTimePassword();
+        String secret = OneTimePassword.getRandomNumber(CustomConstants.SECRET_KEY_LENGTH);
+        String myToken = token.generateToken(secret, "" + CustomConstants.NUMBER_BASE
+                , CustomConstants.NUMBER_DIGIT);
+
+        context.setProperty(CustomConstants.OTP_TOKEN, myToken);
+        context.setProperty(CustomConstants.OTP_GENERATED_TIME, System.currentTimeMillis());
+        context.setProperty(CustomConstants.OTP_EXPIRED, "false");
     }
 }
