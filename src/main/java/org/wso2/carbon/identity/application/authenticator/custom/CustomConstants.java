@@ -28,6 +28,15 @@ public class CustomConstants {
     public static final String REDIRECT_URL = "redirectUrl";
     public static final String OTP_PAGE_URL = "otpPageUrl";
 
+    public static final String PROPERTY_REDIRECT_NAME = "redirectUrl";
+    public static final String PROPERTY_REDIRECT_DISPLAY_NAME = "Redirect URL";
+    public static final String PROPERTY_REDIRECT_DESCRIPTION = "The URL where the login request will be redirected to";
+    public static final String PROPERTY_STRING_TYPE = "string";
+    public static final String PROPERTY_OTP_NAME = "otpPageUrl";
+    public static final String PROPERTY_OTP_DISPLAY_NAME = "OTP submission page Url";
+    public static final String PROPERTY_OTP_DESCRIPTION = "The URL where the OTP submission request will be redirected to";
+
+
 }
 
 

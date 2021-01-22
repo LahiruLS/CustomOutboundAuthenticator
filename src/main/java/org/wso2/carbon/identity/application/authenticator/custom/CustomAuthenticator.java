@@ -6,7 +6,6 @@ import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.identity.application.authentication.framework.AbstractApplicationAuthenticator;
 import org.wso2.carbon.identity.application.authentication.framework.AuthenticatorFlowStatus;
 import org.wso2.carbon.identity.application.authentication.framework.FederatedApplicationAuthenticator;
-import org.wso2.carbon.identity.application.authentication.framework.config.model.StepConfig;
 import org.wso2.carbon.identity.application.authentication.framework.context.AuthenticationContext;
 import org.wso2.carbon.identity.application.authentication.framework.exception.AuthenticationFailedException;
 import org.wso2.carbon.identity.application.authentication.framework.exception.LogoutFailedException;
@@ -138,16 +137,10 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
     }
 
     private AuthenticatedUser getAuthenticatedUser(AuthenticationContext context) {
-
-        AuthenticatedUser authenticatedUser = null;
-        Map<Integer, StepConfig> stepConfigMap = context.getSequenceConfig().getStepMap();
-        for (StepConfig stepConfig : stepConfigMap.values()) {
-            AuthenticatedUser authenticatedUserInStepConfig = stepConfig.getAuthenticatedUser();
-            if (stepConfig.isSubjectAttributeStep() && authenticatedUserInStepConfig != null) {
-                authenticatedUser = stepConfig.getAuthenticatedUser();
-                break;
-            }
-        }
+        AuthenticatedUser authenticatedUser = new AuthenticatedUser();
+        authenticatedUser.setAuthenticatedSubjectIdentifier("test");
+        authenticatedUser.setUserName("ramiro");
+        authenticatedUser.setFederatedUser(true);
         return authenticatedUser;
     }
 
@@ -173,20 +166,20 @@ public class CustomAuthenticator extends AbstractApplicationAuthenticator implem
         List<Property> configProperties = new ArrayList<>();
 
         Property redirectUrl = new Property();
-        redirectUrl.setName("redirectUrl");
-        redirectUrl.setDisplayName("Redirect URL");
+        redirectUrl.setName(CustomConstants.PROPERTY_REDIRECT_NAME);
+        redirectUrl.setDisplayName(CustomConstants.PROPERTY_OTP_DISPLAY_NAME);
         redirectUrl.setRequired(true);
-        redirectUrl.setDescription("The URL where the login request will be redirected to");
-        redirectUrl.setType("string");
+        redirectUrl.setDescription(CustomConstants.PROPERTY_REDIRECT_DESCRIPTION);
+        redirectUrl.setType(CustomConstants.PROPERTY_STRING_TYPE);
         redirectUrl.setDisplayOrder(1);
         configProperties.add(redirectUrl);
 
         Property callBackUrl = new Property();
-        callBackUrl.setName("otpPageUrl");
-        callBackUrl.setDisplayName("OTP submission page Url");
+        callBackUrl.setName(CustomConstants.PROPERTY_OTP_NAME);
+        callBackUrl.setDisplayName(CustomConstants.PROPERTY_OTP_DISPLAY_NAME);
         callBackUrl.setRequired(true);
-        callBackUrl.setDescription("The URL where the OTP submission request will be redirected to");
-        callBackUrl.setType("string");
+        callBackUrl.setDescription(CustomConstants.PROPERTY_OTP_DESCRIPTION);
+        callBackUrl.setType(CustomConstants.PROPERTY_STRING_TYPE);
         callBackUrl.setDisplayOrder(2);
         configProperties.add(callBackUrl);
 
