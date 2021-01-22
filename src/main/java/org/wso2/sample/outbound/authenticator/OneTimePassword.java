@@ -1,4 +1,4 @@
-package org.wso2.carbon.identity.application.authenticator.custom;
+package org.wso2.sample.outbound.authenticator;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;

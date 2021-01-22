@@ -1,4 +1,4 @@
-package org.wso2.carbon.identity.application.authenticator.custom;
+package org.wso2.sample.outbound.authenticator;
 
 public class CustomConstants {
     public static final String SESSION_DATA_KEY = "sessionDataKey";

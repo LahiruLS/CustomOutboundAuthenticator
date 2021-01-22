@@ -1,11 +1,11 @@
-package org.wso2.carbon.identity.application.authenticator.custom.internal;
+package org.wso2.sample.outbound.authenticator.internal;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.osgi.service.component.ComponentContext;
 import org.osgi.service.component.annotations.*;
 import org.wso2.carbon.identity.application.authentication.framework.ApplicationAuthenticator;
-import org.wso2.carbon.identity.application.authenticator.custom.CustomAuthenticator;
+import org.wso2.sample.outbound.authenticator.CustomAuthenticator;
 import org.wso2.carbon.user.core.service.RealmService;
 
 @Component(name = "carbon.identity.application.authenticator.custom.component", immediate = true)
